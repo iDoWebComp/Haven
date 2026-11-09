@@ -1203,6 +1203,11 @@ module.exports = function register(socket, ctx) {
 
     const members = getMentionableChannelMembers(channel.id);
 
-    socket.emit('channel-members', { channelCode: code, members });
+    // Bots (webhooks) hold no user row, so they are not in `members` and
+    // the composer's @ autocomplete could never suggest them.
+    const webhooks = db.prepare(
+      'SELECT id, name FROM webhooks WHERE channel_id = ? AND is_active = 1 ORDER BY name'
+    ).all(channel.id);
+    socket.emit('channel-members', { channelCode: code, members, webhooks });
   });
 };

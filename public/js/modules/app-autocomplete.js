@@ -157,7 +157,12 @@ _showMentionDropdown() {
     }
     return best;
   };
-  const filtered = (this.channelMembers || [])
+  // Bots arrive separately from the server: a webhook has no user row, so
+  // without this the @ dropdown never offers them.
+  const botCandidates = (this.channelWebhooks || []).map(w => ({
+    id: `bot:${w.id}`, username: w.name, loginName: w.name, isBot: true,
+  }));
+  const filtered = [...(this.channelMembers || []), ...botCandidates]
     .map((m, i) => ({ m, i, rank: mentionRank(m) }))
     .filter(x => x.rank >= 0)
     .sort((a, b) => a.rank - b.rank || a.i - b.i)
