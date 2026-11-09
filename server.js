@@ -1693,6 +1693,31 @@ app.get('/api/webhooks/:token', webhookLimiter, (req, res) => {
   });
 });
 
+// A bot has no socket to emit 'typing' on, so let it announce that it is
+// working on a reply over its own token. The indicator clears itself when the
+// message lands (or when the client's typing timer expires).
+app.post('/api/webhooks/:token/typing', webhookLimiter, express.json({ limit: '2kb' }), (req, res) => {
+  const { getDb } = require('./src/database');
+  const db = getDb();
+  const { token } = req.params;
+  if (!token || typeof token !== 'string' || token.length !== 64) {
+    return res.status(400).json({ error: 'Invalid token' });
+  }
+  const webhook = db.prepare(
+    `SELECT w.id, w.name, c.code as channel_code FROM webhooks w JOIN channels c ON w.channel_id = c.id WHERE w.token = ? AND w.is_active = 1 AND c.is_dm = 0 AND ${CREATOR_NOT_BANNED_SQL}`
+  ).get(token);
+  if (!webhook) {
+    return res.status(404).json({ error: 'Webhook not found or inactive' });
+  }
+  // Negative id keeps it out of the way of real user ids, the way voice does.
+  io.to(`channel:${webhook.channel_code}`).emit('user-typing', {
+    channelCode: webhook.channel_code,
+    userId: -webhook.id,
+    username: webhook.name,
+  });
+  res.json({ ok: true });
+});
+
 app.post('/api/webhooks/:token', webhookLimiter, express.json({ limit: '64kb' }), (req, res) => {
   const { getDb } = require('./src/database');
   const db = getDb();
